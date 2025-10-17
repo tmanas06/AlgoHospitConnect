@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: hosconnect-backend
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install -r backend/requirements.txt"
+    startCommand: "uvicorn app.main:app --app-dir backend --host 0.0.0.0 --port 10000"
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: ALGORAND_NETWORK
+        value: testnet
+      - key: ALGOD_URL
+        value: https://testnet-api.algonode.cloud
+      - key: INDEXER_URL
+        value: https://testnet-idx.algonode.cloud
+      - key: ALGOD_TOKEN
+        sync: false
+
+
