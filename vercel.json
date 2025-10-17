@@ -2,13 +2,10 @@
   "version": 2,
   "buildCommand": "npm --prefix frontend ci && npm --prefix frontend run build",
   "outputDirectory": "frontend/dist",
-  "builds": [
-    { "src": "api/**/*.py", "use": "@vercel/python" }
-  ],
+  "builds": [{ "src": "api/**/*.py", "use": "@vercel/python" }],
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/index.py" },
-    { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "/frontend/dist/$1" }
+    { "src": "/(.*)", "dest": "/index.html" }
   ]
 }
 
