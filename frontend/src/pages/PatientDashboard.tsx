@@ -12,6 +12,7 @@ import {
   Heart
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import WalletConnect from '../components/WalletConnect'
 
 // Patient Dashboard Components
 const PatientHome: React.FC = () => {
@@ -130,6 +131,9 @@ const PatientHome: React.FC = () => {
           </Link>
         </div>
       </div>
+
+      {/* Wallet Connection for Blockchain Activities */}
+      <WalletConnect />
     </div>
   )
 }
@@ -341,6 +345,9 @@ const DocRating: React.FC = () => {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Rate Doctors</h2>
+      
+      {/* Wallet Connection for Blockchain Activities */}
+      <WalletConnect />
       
       <div className="space-y-4">
         {consultations.map((consultation) => (

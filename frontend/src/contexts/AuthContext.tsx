@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import * as algosdk from 'algosdk'
-import { peraWallet, isPeraWalletAvailable } from '../config/wallet'
+import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
+import { peraWallet, isPeraWalletAvailable, connectWithQR, connectWithExtension } from '../config/wallet'
 import { smartContractService } from '../services/smartContract'
 
 // Extend window interface for Pera Wallet
@@ -14,11 +15,14 @@ declare global {
 export type UserRole = 'doctor' | 'patient' | null
 
 export interface User {
-  address: string
+  address?: string
   role: UserRole
   name?: string
   specialization?: string
   isRegistered: boolean
+  privyId?: string
+  email?: string
+  walletConnected?: boolean
 }
 
 interface AuthContextType {
@@ -27,7 +31,9 @@ interface AuthContextType {
   login: (role: UserRole, userData?: Partial<User>) => Promise<void>
   logout: () => Promise<void>
   updateUser: (userData: Partial<User>) => void
-  connectWallet: () => Promise<string | null>
+  connectWallet: (method: 'qr' | 'extension') => Promise<string | null>
+  disconnectWallet: () => Promise<void>
+  isWalletConnected: boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -44,9 +50,11 @@ interface AuthProviderProps {
   children: ReactNode
 }
 
-export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+// Inner AuthProvider component that uses Privy
+const AuthProviderInner: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const { ready, authenticated, user: privyUser, login: privyLogin, logout: privyLogout } = usePrivy()
 
   // Load user from localStorage on mount
   useEffect(() => {
@@ -62,28 +70,63 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, [])
 
-  const connectWallet = async (): Promise<string | null> => {
-    try {
-      console.log('🔗 Attempting to connect to Pera Wallet...')
-      
-      // Check if Pera Wallet is available
-      if (!isPeraWalletAvailable()) {
-        console.error('❌ Pera Wallet not found. Please install Pera Wallet extension.')
-        throw new Error('Pera Wallet not found. Please install Pera Wallet extension.')
+  // Sync with Privy user when authenticated
+  useEffect(() => {
+    if (ready && authenticated && privyUser && !user) {
+      const privyUserData: User = {
+        privyId: privyUser.id,
+        email: privyUser.email?.address,
+        role: null, // Will be set during login
+        isRegistered: false,
+        walletConnected: false
       }
+      setUser(privyUserData)
+    }
+  }, [ready, authenticated, privyUser, user])
 
-      console.log('🔌 Pera Wallet found, attempting connection...')
+  const connectWallet = async (method: 'qr' | 'extension'): Promise<string | null> => {
+    console.log(`🔗 [AuthContext] connectWallet called with method: ${method}`);
+    
+    try {
+      console.log(`🔗 [AuthContext] Attempting to connect to Pera Wallet via ${method}...`);
       
-      // Try to connect to Pera Wallet
-      const accounts = await peraWallet.connect()
+      let address: string | null = null;
       
-      if (accounts && accounts.length > 0) {
-        console.log('✅ Successfully connected to Pera Wallet')
-        console.log('📱 Connected account:', accounts[0])
-        return accounts[0]
+      if (method === 'qr') {
+        console.log('🔄 [AuthContext] Connecting with QR code...');
+        try {
+          address = await connectWithQR();
+        } catch (qrError) {
+          console.error('❌ [AuthContext] QR connection failed:', qrError);
+          throw new Error(`QR code connection failed: ${qrError instanceof Error ? qrError.message : 'Unknown error'}`);
+        }
       } else {
-        console.error('❌ No accounts returned from Pera Wallet')
-        throw new Error('No accounts returned from Pera Wallet')
+        console.log('🔌 [AuthContext] Connecting with extension...');
+        try {
+          address = await connectWithExtension();
+        } catch (extError) {
+          console.error('❌ [AuthContext] Extension connection failed:', extError);
+          // If extension connection fails, suggest trying QR code
+          throw new Error(`Extension connection failed. ${extError instanceof Error ? extError.message : 'Please try using QR code instead.'}`);
+        }
+      }
+      
+      if (address) {
+        console.log('✅ [AuthContext] Successfully connected to Pera Wallet');
+        console.log('📱 [AuthContext] Connected account:', address);
+        
+        // Update user with wallet connection
+        if (user) {
+          const updatedUser = { ...user, address, walletConnected: true }
+          setUser(updatedUser)
+          localStorage.setItem('medicalConnectUser', JSON.stringify(updatedUser))
+        }
+        
+        return address;
+      } else {
+        const errorMsg = '❌ [AuthContext] No accounts returned from Pera Wallet';
+        console.error(errorMsg);
+        throw new Error('No accounts returned from Pera Wallet');
       }
     } catch (error) {
       console.error('❌ Failed to connect wallet:', error)
@@ -103,42 +146,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }
 
+  const disconnectWallet = async (): Promise<void> => {
+    try {
+      await peraWallet.disconnect()
+      
+      if (user) {
+        const updatedUser = { ...user, address: undefined, walletConnected: false }
+        setUser(updatedUser)
+        localStorage.setItem('medicalConnectUser', JSON.stringify(updatedUser))
+      }
+    } catch (error) {
+      console.error('Failed to disconnect wallet:', error)
+    }
+  }
+
   const login = async (role: UserRole, userData?: Partial<User>) => {
     setIsLoading(true)
     try {
-      const address = await connectWallet()
-      if (!address) {
-        throw new Error('Failed to connect wallet')
+      // First authenticate with Privy if not already authenticated
+      if (!authenticated) {
+        await privyLogin()
+        return // Privy login will trigger the useEffect that sets up the user
       }
 
-      // Register user on the smart contract
-      let contractResult
-      if (role === 'doctor' && userData?.name && userData?.specialization) {
-        contractResult = await smartContractService.registerDoctor(
-          userData.name, 
-          userData.specialization
-        )
-      } else if (role === 'patient' && userData?.name) {
-        contractResult = await smartContractService.registerPatient(userData.name)
-      } else {
-        throw new Error('Missing required user data for registration')
-      }
+      // If user is authenticated with Privy, complete the role selection
+      if (user && privyUser) {
+        const updatedUser: User = {
+          ...user,
+          role,
+          name: userData?.name || user.name,
+          specialization: userData?.specialization || user.specialization,
+          isRegistered: true
+        }
 
-      if (!contractResult.success) {
-        throw new Error(contractResult.error || 'Failed to register on smart contract')
+        setUser(updatedUser)
+        localStorage.setItem('medicalConnectUser', JSON.stringify(updatedUser))
+        
+        console.log('✅ User logged in successfully with role:', role)
       }
-
-      const newUser: User = {
-        address,
-        role,
-        isRegistered: true,
-        ...userData
-      }
-
-      setUser(newUser)
-      localStorage.setItem('medicalConnectUser', JSON.stringify(newUser))
-      
-      console.log('✅ User registered successfully on smart contract:', contractResult.txId)
     } catch (error) {
       console.error('Login failed:', error)
       throw error
@@ -150,8 +195,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = async () => {
     setIsLoading(true)
     try {
-      // Disconnect from Pera Wallet
-      await peraWallet.disconnect()
+      // Disconnect from Pera Wallet if connected
+      if (user?.walletConnected) {
+        await disconnectWallet()
+      }
+      
+      // Logout from Privy
+      await privyLogout()
       
       setUser(null)
       localStorage.removeItem('medicalConnectUser')
@@ -176,13 +226,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     logout,
     updateUser,
-    connectWallet
+    connectWallet,
+    disconnectWallet,
+    isWalletConnected: user?.walletConnected || false
   }
 
   return (
     <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
+  )
+}
+
+// Outer AuthProvider component that wraps with PrivyProvider
+export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
+  return (
+    <PrivyProvider
+      appId={import.meta.env.VITE_PRIVY_APP_ID || 'your-privy-app-id'}
+      config={{
+        loginMethods: ['email', 'google', 'twitter', 'discord'],
+        appearance: {
+          theme: 'light',
+          accentColor: '#676FFF',
+        },
+        embeddedWallets: {
+          createOnLogin: 'users-without-wallets',
+        },
+      }}
+    >
+      <AuthProviderInner>{children}</AuthProviderInner>
+    </PrivyProvider>
   )
 }
 

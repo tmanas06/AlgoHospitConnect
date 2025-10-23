@@ -12,6 +12,7 @@ import {
   CheckCircle,
   User
 } from 'lucide-react'
+import WalletConnect from '../components/WalletConnect'
 
 // Doctor Dashboard Components
 const DoctorHome: React.FC = () => {
@@ -84,6 +85,9 @@ const DoctorHome: React.FC = () => {
           </Link>
         </div>
       </div>
+
+      {/* Wallet Connection for Blockchain Activities */}
+      <WalletConnect />
     </div>
   )
 }
@@ -216,6 +220,9 @@ const ProofOfWork: React.FC = () => {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Submit Proof of Work</h2>
+      
+      {/* Wallet Connection for Blockchain Activities */}
+      <WalletConnect />
       
       <div className="bg-card-light dark:bg-card-dark rounded-xl p-6 border border-primary/20">
         <form onSubmit={handleSubmit} className="space-y-6">
