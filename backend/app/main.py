@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
-from app.routers import auth
+from app.routers import auth, medical
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="HosConnect API", version="0.1.0")
+    app = FastAPI(title="Medical Connect API", version="1.0.0")
 
     allowed_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
 
@@ -18,10 +18,19 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(auth.router)
+    app.include_router(medical.router)
 
     @app.get("/health")
     def health_check() -> dict:
-        return {"status": "ok"}
+        return {"status": "ok", "service": "Medical Connect API"}
+
+    @app.get("/")
+    def root() -> dict:
+        return {
+            "message": "Medical Connect API",
+            "version": "1.0.0",
+            "docs": "/docs"
+        }
 
     return app
 

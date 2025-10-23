@@ -1,88 +1,99 @@
-import { useEffect, useMemo, useState } from 'react'
+import React from 'react'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from './config/wallet'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import ErrorBoundary from './components/ErrorBoundary'
+import LoginPage from './pages/LoginPage'
+import DoctorDashboard from './pages/DoctorDashboard'
+import PatientDashboard from './pages/PatientDashboard'
+import Layout from './components/Layout'
 import './App.css'
-import { getTheme, type ThemeMode } from './theme'
-import { PeraWalletConnect } from '@perawallet/connect'
 
-const pera = new PeraWalletConnect()
+// Protected Route component
+const ProtectedRoute: React.FC<{ children: React.ReactNode; requiredRole?: 'doctor' | 'patient' }> = ({ 
+  children, 
+  requiredRole 
+}) => {
+  const { user, isLoading } = useAuth()
 
-function App() {
-  const [mode, setMode] = useState<ThemeMode>(() => (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'))
-  const theme = useMemo(() => getTheme(mode), [mode])
-  const [accounts, setAccounts] = useState<string[]>([])
-
-  useEffect(() => {
-    document.documentElement.style.background = theme.background
-    document.documentElement.style.color = theme.foreground
-  }, [theme])
-
-  const toggleMode = () => setMode((m) => (m === 'light' ? 'dark' : 'light'))
-
-  async function connectPera() {
-    try {
-      const accs = await pera.connect()
-      setAccounts(accs)
-    } catch (e) {
-      console.error(e)
-    }
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background-light dark:bg-background-dark">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-text-light dark:text-text-dark">Loading...</p>
+        </div>
+      </div>
+    )
   }
 
-  async function copyAddress(address: string) {
-    try {
-      await navigator.clipboard.writeText(address)
-      // Lightweight visual feedback by briefly changing document title
-      const prev = document.title
-      document.title = 'Copied address!'
-      setTimeout(() => (document.title = prev), 800)
-    } catch (err) {
-      console.error('Copy failed', err)
-    }
+  if (!user) {
+    return <Navigate to="/login" replace />
   }
+
+  if (requiredRole && user.role !== requiredRole) {
+    return <Navigate to="/login" replace />
+  }
+
+  return <>{children}</>
+}
+
+// Main App Routes
+const AppRoutes: React.FC = () => {
+  const { user } = useAuth()
 
   return (
-    <div style={{ minHeight: '100vh', display: 'grid', gridTemplateRows: 'auto 1fr', gap: 24 }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 16, background: theme.card, borderBottom: `2px solid ${theme.primary}` }}>
-        <h1 style={{ margin: 0 }}>HosConnect</h1>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <button onClick={toggleMode} style={{ background: theme.secondary, color: '#0f1222', padding: '8px 12px', borderRadius: 8, border: 'none' }}>
-            {mode === 'light' ? 'Dark mode' : 'Light mode'}
-          </button>
-          <button onClick={connectPera} style={{ background: theme.primary, color: '#0f1222', padding: '8px 12px', borderRadius: 8, border: 'none' }}>
-            {accounts.length ? 'Connected' : 'Connect Pera'}
-          </button>
-        </div>
-      </header>
-      <main style={{ padding: 24 }}>
-        <div style={{ background: theme.card, borderRadius: 12, padding: 24, border: `1px solid ${theme.secondary}` }}>
-          <h2 style={{ marginTop: 0 }}>Welcome</h2>
-          <p style={{ opacity: 0.9 }}>A medical dApp on Algorand with Pera Wallet.</p>
-          {accounts.length > 0 && (
-            <div>
-              <h3>Accounts</h3>
-              <ul>
-                {accounts.map((a) => (
-                  <li key={a} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ color: '#16a34a', wordBreak: 'break-all' }}>{a}</span>
-                    <button
-                      onClick={() => copyAddress(a)}
-                      style={{
-                        background: theme.secondary,
-                        color: '#0f1222',
-                        padding: '4px 8px',
-                        borderRadius: 6,
-                        border: 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      Copy
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </main>
-    </div>
+    <Router>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route 
+          path="/doctor/*" 
+          element={
+            <ProtectedRoute requiredRole="doctor">
+              <Layout>
+                <DoctorDashboard />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/patient/*" 
+          element={
+            <ProtectedRoute requiredRole="patient">
+              <Layout>
+                <PatientDashboard />
+              </Layout>
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/" 
+          element={
+            user ? (
+              <Navigate to={user.role === 'doctor' ? '/doctor' : '/patient'} replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          } 
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
+  )
+}
+
+function App() {
+  return (
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <div className="min-h-screen bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark transition-colors">
+            <AppRoutes />
+          </div>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   )
 }
 

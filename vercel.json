@@ -1,13 +1,26 @@
 {
   "version": 2,
+  "name": "medical-connect-dapp",
   "builds": [
-    { "src": "frontend/package.json", "use": "@vercel/static-build", "config": { "distDir": "dist", "installCommand": "npm ci", "buildCommand": "npm run vercel-build" } },
+    { 
+      "src": "frontend/package.json", 
+      "use": "@vercel/static-build", 
+      "config": { 
+        "distDir": "dist", 
+        "installCommand": "npm ci", 
+        "buildCommand": "npm run vercel-build" 
+      } 
+    },
     { "src": "api/**/*.py", "use": "@vercel/python" }
   ],
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api/index.py" },
     { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  ],
+  "env": {
+    "VITE_API_URL": "https://medical-connect-api.vercel.app",
+    "VITE_WALLETCONNECT_PROJECT_ID": "@walletconnect-project-id"
+  }
 }
 
 
