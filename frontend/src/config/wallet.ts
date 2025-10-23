@@ -2,7 +2,6 @@ import { PeraWalletConnect } from '@perawallet/connect'
 import WalletConnect from '@walletconnect/client'
 import QRCodeModal from 'algorand-walletconnect-qrcode-modal'
 import { QueryClient } from '@tanstack/react-query'
-import algosdk from 'algosdk'
 
 // Algorand Network Configuration
 export const ALGORAND_NETWORKS = {

@@ -2,8 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import * as algosdk from 'algosdk'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
-import { peraWallet, isPeraWalletAvailable, connectWithQR, connectWithExtension } from '../config/wallet'
-import { smartContractService } from '../services/smartContract'
+import { peraWallet, connectWithQR, connectWithExtension } from '../config/wallet'
 
 // Extend window interface for Pera Wallet
 declare global {
@@ -250,7 +249,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           accentColor: '#676FFF',
         },
         embeddedWallets: {
-          createOnLogin: 'users-without-wallets',
+          ethereum: {
+            createOnLogin: 'users-without-wallets',
+          },
         },
       }}
     >
