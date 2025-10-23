@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { usePrivy } from '@privy-io/react-auth'
-import { User, Stethoscope, AlertCircle, ArrowRight, Mail, LogIn } from 'lucide-react'
+import { User, Stethoscope, AlertCircle, Mail, LogIn } from 'lucide-react'
 
 const LoginPage: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<'doctor' | 'patient' | null>(null)
@@ -12,7 +12,7 @@ const LoginPage: React.FC = () => {
   })
   const [error, setError] = useState<string | null>(null)
   
-  const { login, user } = useAuth()
+  const { login } = useAuth()
   const { ready, authenticated, login: privyLogin } = usePrivy()
   const navigate = useNavigate()
 
