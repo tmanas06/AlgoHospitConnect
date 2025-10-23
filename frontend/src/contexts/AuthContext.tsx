@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import React, { createContext, useContext, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import * as algosdk from 'algosdk'
 import { peraWallet, isPeraWalletAvailable } from '../config/wallet'
+import { smartContractService } from '../services/smartContract'
 
 // Extend window interface for Pera Wallet
 declare global {
@@ -66,30 +68,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       // Check if Pera Wallet is available
       if (!isPeraWalletAvailable()) {
-        console.warn('⚠️ Pera Wallet not found. Using demo mode for development.')
-        
-        // Fallback for development/testing
-        if (import.meta.env.VITE_ENABLE_DEBUG === 'true') {
-          const demoAddress = 'DEMO_WALLET_ADDRESS_' + Math.random().toString(36).substr(2, 9)
-          console.log('🔧 Using demo address:', demoAddress)
-          return demoAddress
-        }
-        
+        console.error('❌ Pera Wallet not found. Please install Pera Wallet extension.')
         throw new Error('Pera Wallet not found. Please install Pera Wallet extension.')
       }
 
-      // Check if already connected
-      if (peraWallet.isConnected) {
-        console.log('✅ Already connected to Pera Wallet')
-        const accounts = peraWallet.accounts
-        if (accounts && accounts.length > 0) {
-          console.log('📱 Connected account:', accounts[0])
-          return accounts[0]
-        }
-      }
-
-      // Connect to Pera Wallet
-      console.log('🔌 Connecting to Pera Wallet...')
+      console.log('🔌 Pera Wallet found, attempting connection...')
+      
+      // Try to connect to Pera Wallet
       const accounts = await peraWallet.connect()
       
       if (accounts && accounts.length > 0) {
@@ -105,9 +90,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       // Provide more specific error messages
       if (error instanceof Error) {
-        if (error.message.includes('User rejected')) {
+        if (error.message.includes('User rejected') || error.message.includes('rejected')) {
           throw new Error('Connection rejected by user')
-        } else if (error.message.includes('not found')) {
+        } else if (error.message.includes('not found') || error.message.includes('undefined')) {
           throw new Error('Pera Wallet not found. Please install Pera Wallet extension.')
         } else {
           throw new Error(`Wallet connection failed: ${error.message}`)
@@ -126,6 +111,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('Failed to connect wallet')
       }
 
+      // Register user on the smart contract
+      let contractResult
+      if (role === 'doctor' && userData?.name && userData?.specialization) {
+        contractResult = await smartContractService.registerDoctor(
+          userData.name, 
+          userData.specialization
+        )
+      } else if (role === 'patient' && userData?.name) {
+        contractResult = await smartContractService.registerPatient(userData.name)
+      } else {
+        throw new Error('Missing required user data for registration')
+      }
+
+      if (!contractResult.success) {
+        throw new Error(contractResult.error || 'Failed to register on smart contract')
+      }
+
       const newUser: User = {
         address,
         role,
@@ -135,6 +137,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       setUser(newUser)
       localStorage.setItem('medicalConnectUser', JSON.stringify(newUser))
+      
+      console.log('✅ User registered successfully on smart contract:', contractResult.txId)
     } catch (error) {
       console.error('Login failed:', error)
       throw error

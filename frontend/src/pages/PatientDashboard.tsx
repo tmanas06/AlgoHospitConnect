@@ -8,8 +8,6 @@ import {
   MapPin,
   Clock,
   AlertTriangle,
-  Phone,
-  User,
   Stethoscope,
   Heart
 } from 'lucide-react'
@@ -368,7 +366,7 @@ const DocRating: React.FC = () => {
                       <Star
                         key={i}
                         className={`w-4 h-4 ${
-                          i < consultation.rating ? 'text-yellow-400 fill-current' : 'text-gray-300'
+                          i < (consultation.rating || 0) ? 'text-yellow-400 fill-current' : 'text-gray-300'
                         }`}
                       />
                     ))}
